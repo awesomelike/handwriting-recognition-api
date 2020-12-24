@@ -118,7 +118,6 @@ def recognize(image_path):
     
   filename = ''.join(random.choices(string.ascii_uppercase +
                              string.digits, k = 8)) + '.jpg'
-  print('AZAMAT', filename)
   filepath = './output/' + filename
   cv2.imwrite(filepath, image)
   return filename

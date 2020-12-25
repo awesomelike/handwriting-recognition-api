@@ -8,8 +8,23 @@ import sys
 import cv2
 from flask import Flask, jsonify, request, redirect, flash, url_for, send_from_directory
 from werkzeug.utils import secure_filename
+from werkzeug.datastructures import ImmutableMultiDict
 import string 
 import random 
+
+import mysql.connector
+
+mydb = mysql.connector.connect(
+  host="localhost",
+  user="root",
+  password="",
+  database='ai-handwriting'
+)
+
+mycursor = mydb.cursor()
+
+sql_insert = "INSERT INTO results (phone, filename) VALUES (%s, %s)"
+sql_select = "SELECT * FROM results WHERE phone = %s"
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = './uploads'
@@ -17,7 +32,7 @@ app.config['UPLOAD_FOLDER'] = './uploads'
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
 BASE_URL = ''
 try:
-  BASE_URL = sys.argv[2]
+  BASE_URL = sys.argv[1]
 except:
   BASE_URL = 'http://localhost:3000'
 
@@ -126,8 +141,15 @@ def recognize(image_path):
   # cv2.imshow('Result', image)
   # cv2.waitKey(0)
 
+def fileUrl(filename):
+  return BASE_URL + '/' + 'output' + '/' + filename
+
 @app.route('/recognize', methods=['POST'])
 def upload_file():
+    data = dict(request.form)
+    print (data)
+    phone = data.get('phone')
+    print (phone)
     if request.method == 'POST':
         # check if the post request has the file part
         if 'file' not in request.files:
@@ -141,10 +163,31 @@ def upload_file():
         file.save(uploaded_path)
         output_image = recognize(uploaded_path)
         
-        return jsonify({ 'image': BASE_URL + '/' + 'output' + '/' + output_image })
+        # Store to db
+        val = (phone, output_image)
+        mycursor.execute(sql_insert, val)
+
+        mydb.commit()
+
+        return jsonify({ 'image': fileUrl(output_image) })
+
+@app.route('/outputs/<phone>')
+def list_images(phone):
+  pars = (phone, )
+  mycursor.execute(sql_select, pars)
+  myresult = mycursor.fetchall()
+  lst = []
+  # return jsonify(myresult)
+  for x in myresult:
+    lst.append({
+      'id': x[0],
+      'phone': x[1],
+      'path': fileUrl(x[2])
+    })
+  return jsonify(lst)
 
 @app.route('/output/<path:path>')
-def send_js(path):
+def sendfile(path):
     return send_from_directory('output', path)
 
 if __name__ == '__main__':
